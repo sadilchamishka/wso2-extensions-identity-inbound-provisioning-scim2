@@ -1700,6 +1700,30 @@ public class SCIMUserManager implements UserManager {
         }
     }
 
+    private Set<org.wso2.carbon.user.core.common.User> filterUsersByRole(Node node, int offset, int limit,
+                                                                         String domainName) throws CharonException {
+
+        // Set filter values.
+        String attributeName = ((ExpressionNode) node).getAttributeValue();
+        String filterOperation = ((ExpressionNode) node).getOperation();
+        String attributeValue = ((ExpressionNode) node).getValue();
+
+        attributeValue = UserCoreUtil.addDomainToName(((ExpressionNode) node).getValue(),
+                SCIMCommonConstants.INTERNAL_DOMAIN);
+
+        try {
+            List<String> roleNames = getRoleNames(attributeName, filterOperation, attributeValue);
+            Set<org.wso2.carbon.user.core.common.User> users;
+            users = getUserListOfRoles(roleNames);
+            return users;
+        } catch (UserStoreException e) {
+            String errorMessage = String.format("Error while filtering the users for filter with attribute name: "
+                            + "%s, filter operation: %s and attribute value: %s.", attributeName, filterOperation,
+                    attributeValue);
+            throw resolveError(e, errorMessage);
+        }
+    }
+
     /**
      * Method to get users when a filter is used with a single attribute and when the user store is an instance of
      * PaginatedUserStoreManager since the filter API supports an instance of PaginatedUserStoreManager.
@@ -1721,6 +1745,11 @@ public class SCIMUserManager implements UserManager {
         // Filter users when filter by group.
         if (SCIMConstants.UserSchemaConstants.GROUP_URI.equals(((ExpressionNode) node).getAttributeValue())) {
             return filterUsersByGroup(node, offset, limit, domainName);
+        }
+
+        // Filter users when filter by role.
+        if (SCIMConstants.UserSchemaConstants.ROLES_URI.equals(((ExpressionNode) node).getAttributeValue())) {
+            return filterUsersByRole(node, offset, limit, domainName);
         }
 
         // Filter users when the domain is specified in the request.
@@ -5414,15 +5443,22 @@ public class SCIMUserManager implements UserManager {
         }
 
         // Update user claims.
-        userClaimsToBeModified.putAll(userClaimsToBeAdded);
-        if (MapUtils.isEmpty(simpleMultiValuedClaimsToBeAdded) &&
-                MapUtils.isEmpty(simpleMultiValuedClaimsToBeRemoved)) {
-            // If no multi-valued attribute is modified.
-            carbonUM.setUserClaimValuesWithID(user.getId(), userClaimsToBeModified, null);
-        } else {
-            carbonUM.setUserClaimValuesWithID(user.getId(), convertClaimValuesToList(oldClaimList),
-                    simpleMultiValuedClaimsToBeAdded, simpleMultiValuedClaimsToBeRemoved,
-                    convertClaimValuesToList(userClaimsToBeModified), null);
+        try {
+            // The new claim list can be help full for downstream tasks like outbound provisioning.
+            IdentityUtil.threadLocalProperties.get().put("newClaimList", newClaimList);
+            userClaimsToBeModified.putAll(userClaimsToBeAdded);
+            if (MapUtils.isEmpty(simpleMultiValuedClaimsToBeAdded) &&
+                    MapUtils.isEmpty(simpleMultiValuedClaimsToBeRemoved)) {
+                // If no multi-valued attribute is modified.
+                carbonUM.setUserClaimValuesWithID(user.getId(), userClaimsToBeModified, null);
+            } else {
+                carbonUM.setUserClaimValuesWithID(user.getId(), convertClaimValuesToList(oldClaimList),
+                        simpleMultiValuedClaimsToBeAdded, simpleMultiValuedClaimsToBeRemoved,
+                        convertClaimValuesToList(userClaimsToBeModified), null);
+            }
+        }
+        finally {
+            IdentityUtil.threadLocalProperties.get().remove("newClaimList");
         }
     }
 
