@@ -18,6 +18,8 @@
 
 package org.wso2.carbon.identity.scim2.provider.resources;
 
+import org.wso2.carbon.identity.core.context.IdentityContext;
+import org.wso2.carbon.identity.core.context.model.Flow;
 import org.wso2.carbon.identity.jaxrs.designator.PATCH;
 import org.wso2.carbon.identity.scim2.common.impl.IdentitySCIMManager;
 import org.wso2.carbon.identity.scim2.provider.util.SCIMProviderConstants;
@@ -116,6 +118,7 @@ public class RoleResourceV2 extends AbstractResource {
                                String resourceString) {
 
         try {
+            SupportUtils.enterFlow(Flow.Name.ROLE_CREATE);
             // content-type header is compulsory in post request.
             if (inputFormat == null) {
                 String error = SCIMProviderConstants.CONTENT_TYPE + " not present in the request header";
@@ -144,6 +147,8 @@ public class RoleResourceV2 extends AbstractResource {
             return handleFormatNotSupportedException(e);
         } catch (ForbiddenException e) {
             return handleForbiddenException(e);
+        } finally {
+            IdentityContext.getThreadLocalIdentityContext().exitFlow();
         }
     }
 
@@ -187,6 +192,7 @@ public class RoleResourceV2 extends AbstractResource {
                                @HeaderParam(SCIMProviderConstants.ACCEPT_HEADER) String outputFormat) {
 
         try {
+            SupportUtils.enterFlow(Flow.Name.ROLE_DELETE);
             // defaults to application/scim+json.
             if (outputFormat == null) {
                 outputFormat = SCIMProviderConstants.APPLICATION_SCIM_JSON;
@@ -206,6 +212,8 @@ public class RoleResourceV2 extends AbstractResource {
             return handleCharonException(e);
         } catch (FormatNotSupportedException e) {
             return handleFormatNotSupportedException(e);
+        } finally {
+            IdentityContext.getThreadLocalIdentityContext().exitFlow();
         }
     }
 
@@ -217,6 +225,7 @@ public class RoleResourceV2 extends AbstractResource {
                                String resourceString) {
 
         try {
+            SupportUtils.enterFlow(Flow.Name.ROLE_UPDATE);
             // content-type header is compulsory in post request.
             if (inputFormat == null) {
                 String error = SCIMProviderConstants.CONTENT_TYPE + " not present in the request header";
@@ -247,6 +256,8 @@ public class RoleResourceV2 extends AbstractResource {
             return handleForbiddenException(e);
         } catch (BadRequestException e) {
             return handleBadRequestException(e);
+        } finally {
+            IdentityContext.getThreadLocalIdentityContext().exitFlow();
         }
     }
 
@@ -258,6 +269,7 @@ public class RoleResourceV2 extends AbstractResource {
                               String resourceString) {
 
         try {
+            SupportUtils.enterFlow(Flow.Name.ROLE_UPDATE);
             // content-type header is compulsory in post request.
             if (inputFormat == null) {
                 String error = SCIMProviderConstants.CONTENT_TYPE + " not present in the request header";
@@ -288,6 +300,8 @@ public class RoleResourceV2 extends AbstractResource {
             return handleForbiddenException(e);
         } catch (BadRequestException e) {
             return handleBadRequestException(e);
+        } finally {
+            IdentityContext.getThreadLocalIdentityContext().exitFlow();
         }
     }
 }
