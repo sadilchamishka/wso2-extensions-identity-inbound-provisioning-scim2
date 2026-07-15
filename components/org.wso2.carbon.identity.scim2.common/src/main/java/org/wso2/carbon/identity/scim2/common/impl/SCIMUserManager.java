@@ -7170,8 +7170,8 @@ public class SCIMUserManager implements UserManager {
     private boolean isAgentResourceLimitError(UserStoreClientException e, String username) {
 
         return SCIMCommonConstants.ERROR_CODE_TIER_RESOURCE_LIMIT_REACHED.equals(e.getErrorCode())
-                && IdentityUtil.getAgentIdentityUserstoreName()
-                        .equalsIgnoreCase(UserCoreUtil.extractDomainFromName(username));
+                && StringUtils.equalsIgnoreCase(IdentityUtil.getAgentIdentityUserstoreName(),
+                        UserCoreUtil.extractDomainFromName(username));
     }
 
     private void handleAgentResourceLimitReached(UserStoreClientException e) throws ForbiddenException {
