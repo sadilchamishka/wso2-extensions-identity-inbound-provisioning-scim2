@@ -462,6 +462,9 @@ public class SCIMUserManager implements UserManager {
             if (isResourceLimitReachedError(e)) {
                 handleResourceLimitReached();
             }
+            if (isAgentResourceLimitError(e, user.getUserName())) {
+                handleAgentResourceLimitReached(e);
+            }
             handleAndThrowClientExceptionForDuplicateClaim(e, errorMessage);
             publishEventOnUserRegistrationFailure(user, e.getErrorCode(), e.getMessage(), claimsInLocalDialect);
             throw new BadRequestException(errorMessage, ResponseCodeConstants.INVALID_VALUE);
@@ -477,6 +480,10 @@ public class SCIMUserManager implements UserManager {
                 }
                 if (ex instanceof UserStoreClientException && isResourceLimitReachedError((UserStoreClientException) ex)) {
                     handleResourceLimitReached();
+                }
+                if (ex instanceof UserStoreClientException &&
+                        isAgentResourceLimitError((UserStoreClientException) ex, user.getUserName())) {
+                    handleAgentResourceLimitReached((UserStoreClientException) ex);
                 }
 
                 publishEventOnUserRegistrationFailure(user, ResponseCodeConstants.INVALID_VALUE, ex.getMessage(),
@@ -7149,6 +7156,27 @@ public class SCIMUserManager implements UserManager {
     private void handleResourceLimitReached() throws ForbiddenException {
 
         throw new ForbiddenException("Maximum number of allowed users have been reached.", "userLimitReached");
+    }
+
+    /**
+     * Check whether the given client exception was caused by a tier resource limit (RLS-10001) while creating an
+     * agent. Agents live in the agent identity userstore, so the check is scoped to that userstore domain to avoid
+     * altering the error responses of regular user creation flows.
+     *
+     * @param e        Client exception thrown by the user core.
+     * @param username Username (with domain) of the user being created.
+     * @return true if this is an agent creation blocked by a resource limit.
+     */
+    private boolean isAgentResourceLimitError(UserStoreClientException e, String username) {
+
+        return SCIMCommonConstants.ERROR_CODE_TIER_RESOURCE_LIMIT_REACHED.equals(e.getErrorCode())
+                && IdentityUtil.getAgentIdentityUserstoreName()
+                        .equalsIgnoreCase(UserCoreUtil.extractDomainFromName(username));
+    }
+
+    private void handleAgentResourceLimitReached(UserStoreClientException e) throws ForbiddenException {
+
+        throw new ForbiddenException(e.getMessage(), "applicationLimitReached");
     }
 
     /**

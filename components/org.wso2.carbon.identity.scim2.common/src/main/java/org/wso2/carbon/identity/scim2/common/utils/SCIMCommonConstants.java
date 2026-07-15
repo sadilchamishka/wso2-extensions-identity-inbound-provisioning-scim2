@@ -174,6 +174,7 @@ public class SCIMCommonConstants {
     public static final String MOBILE_REGEX =
             "^\\s*(?:\\+?(\\d{1,3}))?[-. (]*(\\d{3})?[-. )]*(\\d{3})?[-. ]*(\\d{4,6})(?: *x(\\d+))?\\s*$";
     public static final String ERROR_CODE_RESOURCE_LIMIT_REACHED = "ATS-10001";
+    public static final String ERROR_CODE_TIER_RESOURCE_LIMIT_REACHED = "RLS-10001";
     public static final String DEFAULT_REGEX = "[^<>`\"]+";
     public static final String MIN_LENGTH = "minLength";
     public static final String MAX_LENGTH = "maxLength";
