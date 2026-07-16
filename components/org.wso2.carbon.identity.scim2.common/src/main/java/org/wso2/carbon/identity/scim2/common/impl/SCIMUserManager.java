@@ -463,7 +463,7 @@ public class SCIMUserManager implements UserManager {
                 handleResourceLimitReached();
             }
             if (isAgentResourceLimitError(e, user.getUserName())) {
-                handleAgentResourceLimitReached(e);
+                handleAgentResourceLimitReached();
             }
             handleAndThrowClientExceptionForDuplicateClaim(e, errorMessage);
             publishEventOnUserRegistrationFailure(user, e.getErrorCode(), e.getMessage(), claimsInLocalDialect);
@@ -483,7 +483,7 @@ public class SCIMUserManager implements UserManager {
                 }
                 if (ex instanceof UserStoreClientException &&
                         isAgentResourceLimitError((UserStoreClientException) ex, user.getUserName())) {
-                    handleAgentResourceLimitReached((UserStoreClientException) ex);
+                    handleAgentResourceLimitReached();
                 }
 
                 publishEventOnUserRegistrationFailure(user, ResponseCodeConstants.INVALID_VALUE, ex.getMessage(),
@@ -7174,9 +7174,10 @@ public class SCIMUserManager implements UserManager {
                         UserCoreUtil.extractDomainFromName(username));
     }
 
-    private void handleAgentResourceLimitReached(UserStoreClientException e) throws ForbiddenException {
+    private void handleAgentResourceLimitReached() throws ForbiddenException {
 
-        throw new ForbiddenException(e.getMessage(), "applicationLimitReached");
+        throw new ForbiddenException("Maximum number of allowed applications have been reached.",
+                "applicationLimitReached");
     }
 
     /**
