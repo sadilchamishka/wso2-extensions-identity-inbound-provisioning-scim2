@@ -51,6 +51,8 @@ import org.wso2.charon3.core.schema.SCIMConstants;
 import org.wso2.charon3.core.utils.AttributeUtil;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Date;
@@ -77,6 +79,8 @@ import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.NO
 import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.MAX_LENGTH;
 import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.MIN_LENGTH;
 import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.REQUIRED;
+import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR;
+import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.ErrorMessages.ERROR_CODE_INVALID_DATE_OF_BIRTH;
 import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.ErrorMessages.ERROR_CODE_LENGTH_VIOLATION;
 import static org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants.ErrorMessages.ERROR_CODE_REGEX_VIOLATION;
 
@@ -225,6 +229,7 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
             case DATE_OF_BIRTH_LOCAL_CLAIM:
                 validateClaimValueForRegex(claimURI, claimValue, tenantDomain, DATE_OF_BIRTH_REGEX,
                         DOB_REG_EX_VALIDATION_DEFAULT_ERROR, userStoreDomain);
+                validateDateOfBirthValue(claimValue);
                 break;
             case MOBILE_LOCAL_CLAIM:
                 validateClaimValueForRegex(claimURI, claimValue, tenantDomain, MOBILE_REGEX,
@@ -288,6 +293,32 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
                     throw new UserStoreClientException(regexError, ERROR_CODE_REGEX_VIOLATION.getCode());
                 }
             }
+        }
+    }
+
+    /**
+     * Validate the date of birth claim value semantically. The value should be an existing
+     * calendar date and should not be a future date.
+     *
+     * @param claimValue Date of birth claim value in YYYY-MM-DD format.
+     * @throws UserStoreClientException When the value is not an existing date or is a future date.
+     */
+    private void validateDateOfBirthValue(String claimValue) throws UserStoreClientException {
+
+        if (StringUtils.isBlank(claimValue)) {
+            return;
+        }
+        LocalDate dateOfBirth;
+        try {
+            dateOfBirth = LocalDate.parse(claimValue);
+        } catch (DateTimeParseException e) {
+            // Value matches the YYYY-MM-DD pattern but is not an existing calendar date. Ex: 2025-02-30.
+            throw new UserStoreClientException(DOB_REG_EX_VALIDATION_DEFAULT_ERROR,
+                    ERROR_CODE_INVALID_DATE_OF_BIRTH.getCode());
+        }
+        if (dateOfBirth.isAfter(LocalDate.now())) {
+            throw new UserStoreClientException(DOB_FUTURE_DATE_VALIDATION_ERROR,
+                    ERROR_CODE_INVALID_DATE_OF_BIRTH.getCode());
         }
     }
 
@@ -564,6 +595,7 @@ public class SCIMUserOperationListener extends AbstractIdentityUserOperationEven
                 case DATE_OF_BIRTH_LOCAL_CLAIM:
                     validateClaimValueForRegex(DATE_OF_BIRTH_LOCAL_CLAIM, claims.get(DATE_OF_BIRTH_LOCAL_CLAIM),
                             tenantDomain, DATE_OF_BIRTH_REGEX, DOB_REG_EX_VALIDATION_DEFAULT_ERROR, userStoreDomain);
+                    validateDateOfBirthValue(claims.get(DATE_OF_BIRTH_LOCAL_CLAIM));
                     break;
                 case MOBILE_LOCAL_CLAIM:
                     validateClaimValueForRegex(MOBILE_LOCAL_CLAIM, claims.get(MOBILE_LOCAL_CLAIM), tenantDomain,

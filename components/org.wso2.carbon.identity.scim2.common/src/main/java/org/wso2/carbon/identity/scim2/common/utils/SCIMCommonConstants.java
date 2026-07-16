@@ -165,6 +165,7 @@ public class SCIMCommonConstants {
     public static final String PROP_DISPLAYNAME = "DisplayName";
     public static final String DOB_REG_EX_VALIDATION_DEFAULT_ERROR =
             "Date of Birth is not in the correct format of YYYY-MM-DD";
+    public static final String DOB_FUTURE_DATE_VALIDATION_ERROR = "Date of Birth cannot be a future date";
     public static final String MOBILE_REGEX_VALIDATION_DEFAULT_ERROR =
             "Mobile number is not in the correct format. Valid format is [+][country code][area code][local phone number]";
     public static final String COMMON_REGEX_VALIDATION_ERROR = "%s is not in the correct format.";
@@ -238,7 +239,9 @@ public class SCIMCommonConstants {
         ERROR_CODE_REGEX_VIOLATION("SUO-10001", "Regex validation error",
                 "%s attribute value doesn't match with %s regex pattern"),
         ERROR_CODE_LENGTH_VIOLATION("SUO-10002", "Length validation error",
-                "%s attribute should be between %s and %s characters");
+                "%s attribute should be between %s and %s characters"),
+        ERROR_CODE_INVALID_DATE_OF_BIRTH("SUO-10003", "Date of Birth validation error",
+                "Date of Birth attribute value is invalid");
 
         private final String code;
         private final String message;

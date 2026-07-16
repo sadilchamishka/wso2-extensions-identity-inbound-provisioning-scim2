@@ -36,6 +36,7 @@ import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.scim2.common.DAO.GroupDAO;
 import org.wso2.carbon.identity.scim2.common.exceptions.IdentitySCIMException;
 import org.wso2.carbon.identity.scim2.common.internal.component.SCIMCommonComponentHolder;
+import org.wso2.carbon.identity.scim2.common.utils.SCIMCommonConstants;
 import org.wso2.carbon.identity.scim2.common.utils.SCIMCommonUtils;
 import org.wso2.carbon.user.api.Permission;
 import org.wso2.carbon.user.api.RealmConfiguration;
@@ -578,6 +579,51 @@ public class SCIMUserOperationListenerTest {
                 method.invoke(scimUserOperationListener, claimURI, claimValue, tenantDomain, defaultRegex,
                         defaultRegexValidationError, userStoreDomain);
             }
+        }
+    }
+
+    @DataProvider(name = "validateDateOfBirthValueData")
+    public Object[][] validateDateOfBirthValueData() {
+
+        return new Object[][]{
+                // Valid past date.
+                {"1990-05-10", null},
+                // Blank values are skipped.
+                {"", null},
+                {null, null},
+                // Today is not a future date.
+                {java.time.LocalDate.now().toString(), null},
+                // Valid leap day.
+                {"2024-02-29", null},
+                // Future date.
+                {java.time.LocalDate.now().plusDays(1).toString(),
+                        SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR},
+                {java.time.LocalDate.now().plusYears(2).toString(),
+                        SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR},
+                // Non existing calendar dates.
+                {"2025-02-30", SCIMCommonConstants.DOB_REG_EX_VALIDATION_DEFAULT_ERROR},
+                {"2023-02-29", SCIMCommonConstants.DOB_REG_EX_VALIDATION_DEFAULT_ERROR}
+        };
+    }
+
+    @Test(dataProvider = "validateDateOfBirthValueData")
+    public void testValidateDateOfBirthValue(String claimValue, String expectedError) throws Exception {
+
+        java.lang.reflect.Method method = SCIMUserOperationListener.class.getDeclaredMethod(
+                "validateDateOfBirthValue", String.class);
+        method.setAccessible(true);
+
+        if (expectedError != null) {
+            try {
+                method.invoke(scimUserOperationListener, claimValue);
+                org.testng.Assert.fail("Expected UserStoreClientException to be thrown");
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                Throwable cause = e.getCause();
+                assertTrue(cause instanceof org.wso2.carbon.user.core.UserStoreClientException);
+                assertEquals(cause.getMessage(), expectedError);
+            }
+        } else {
+            method.invoke(scimUserOperationListener, claimValue);
         }
     }
 
