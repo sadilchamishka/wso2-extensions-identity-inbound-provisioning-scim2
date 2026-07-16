@@ -7176,8 +7176,8 @@ public class SCIMUserManager implements UserManager {
 
     private void handleAgentResourceLimitReached() throws ForbiddenException {
 
-        throw new ForbiddenException("Maximum number of allowed applications have been reached.",
-                "applicationLimitReached");
+        throw new ForbiddenException("Agent application creation failed. Maximum number of allowed applications "
+                + "have been reached.", "applicationLimitReached");
     }
 
     /**
