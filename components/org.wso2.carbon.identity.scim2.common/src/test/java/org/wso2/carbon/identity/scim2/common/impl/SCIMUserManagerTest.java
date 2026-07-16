@@ -2950,6 +2950,93 @@ public class SCIMUserManagerTest {
         }
     }
 
+    @DataProvider(name = "agentResourceLimitErrorDataProvider")
+    public Object[][] agentResourceLimitErrorDataProvider() {
+
+        UserStoreClientException resourceLimitException = new UserStoreClientException(
+                "Agent application creation failed: Maximum number of allowed applications have been reached.",
+                SCIMCommonConstants.ERROR_CODE_TIER_RESOURCE_LIMIT_REACHED);
+        return new Object[][]{
+                // Client exception thrown directly.
+                { resourceLimitException },
+                // Client exception wrapped in a UserStoreException, as thrown by the user core.
+                { new org.wso2.carbon.user.core.UserStoreException("Error while persisting the user.",
+                        resourceLimitException) }
+        };
+    }
+
+    @Test(dataProvider = "agentResourceLimitErrorDataProvider")
+    public void testCreateUser_AgentResourceLimitReachedReturnsForbidden(UserStoreException thrownException)
+            throws Exception {
+
+        User user = new User();
+        user.setUserName("AGENT/9a276ed3-4b5a-4a55-89f4-9d09879e5a31");
+
+        when(IdentityUtil.getProperty(SCIMCommonConstants.ENABLE_LOGIN_IDENTIFIERS)).thenReturn("false");
+        when(IdentityUtil.extractDomainFromName(anyString())).thenCallRealMethod();
+        when(IdentityUtil.getAgentIdentityUserstoreName()).thenReturn("AGENT");
+
+        when(ApplicationManagementService.getInstance()).thenReturn(applicationManagementService);
+        when(applicationManagementService.getServiceProvider(anyString(), anyString())).thenReturn(null);
+
+        when(mockedUserStoreManager.isExistingUser(anyString())).thenReturn(false);
+        when(mockedUserStoreManager.getSecondaryUserStoreManager(anyString())).thenReturn(mockedUserStoreManager);
+        when(mockedUserStoreManager.isSCIMEnabled()).thenReturn(true);
+        when(mockedUserStoreManager.addUserWithID(anyString(), any(), any(), any(), any()))
+                .thenThrow(thrownException);
+
+        IdentityEventService mockService = mock(IdentityEventService.class);
+        scimCommonComponentHolder.when(SCIMCommonComponentHolder::getIdentityEventService).thenReturn(mockService);
+
+        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager,
+                mockClaimMetadataManagementService, MultitenantConstants.SUPER_TENANT_DOMAIN_NAME);
+
+        try {
+            scimUserManager.createUser(user, null);
+            Assert.fail("Expected ForbiddenException");
+        } catch (ForbiddenException e) {
+            // The agent application limit must surface as a 403 with a machine-readable scimType,
+            // mirroring the userLimitReached handling for regular users.
+            assertEquals(e.getScimType(), "applicationLimitReached");
+        }
+    }
+
+    @Test
+    public void testCreateUser_NonAgentResourceLimitErrorKeepsExistingBehavior() throws Exception {
+
+        User user = new User();
+        user.setUserName("DomainName/testUser1");
+
+        when(IdentityUtil.getProperty(SCIMCommonConstants.ENABLE_LOGIN_IDENTIFIERS)).thenReturn("false");
+        when(IdentityUtil.extractDomainFromName(anyString())).thenCallRealMethod();
+        when(IdentityUtil.getAgentIdentityUserstoreName()).thenReturn("AGENT");
+
+        when(ApplicationManagementService.getInstance()).thenReturn(applicationManagementService);
+        when(applicationManagementService.getServiceProvider(anyString(), anyString())).thenReturn(null);
+
+        when(mockedUserStoreManager.isExistingUser(anyString())).thenReturn(false);
+        when(mockedUserStoreManager.getSecondaryUserStoreManager(anyString())).thenReturn(mockedUserStoreManager);
+        when(mockedUserStoreManager.isSCIMEnabled()).thenReturn(true);
+        when(mockedUserStoreManager.addUserWithID(anyString(), any(), any(), any(), any()))
+                .thenThrow(new UserStoreClientException("Resource limit reached.",
+                        SCIMCommonConstants.ERROR_CODE_TIER_RESOURCE_LIMIT_REACHED));
+
+        IdentityEventService mockService = mock(IdentityEventService.class);
+        scimCommonComponentHolder.when(SCIMCommonComponentHolder::getIdentityEventService).thenReturn(mockService);
+
+        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager,
+                mockClaimMetadataManagementService, MultitenantConstants.SUPER_TENANT_DOMAIN_NAME);
+
+        try {
+            scimUserManager.createUser(user, null);
+            Assert.fail("Expected BadRequestException");
+        } catch (BadRequestException e) {
+            // Users outside the agent userstore must keep the existing error response even when the
+            // exception carries the tier resource limit error code.
+            assertEquals(e.getScimType(), ResponseCodeConstants.INVALID_VALUE);
+        }
+    }
+
     @Test(dataProvider = "duplicateClaimErrorDataProvider")
     public void testUpdateUser_DuplicateClaimErrorReturnsExpectedResponse(
             boolean isConflictOnClaimUniquenessViolationEnabled,
