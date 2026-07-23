@@ -595,9 +595,10 @@ public class SCIMUserOperationListenerTest {
                 {java.time.LocalDate.now().toString(), null},
                 // Valid leap day.
                 {"2024-02-29", null},
-                // Future date.
-                {java.time.LocalDate.now().plusDays(1).toString(),
-                        SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR},
+                // Future date. A fixed far-future date is used instead of LocalDate.now().plusDays(1) so the
+                // fixture cannot flip to "today" if a midnight boundary is crossed between data provider
+                // evaluation and test execution.
+                {"9999-12-31", SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR},
                 {java.time.LocalDate.now().plusYears(2).toString(),
                         SCIMCommonConstants.DOB_FUTURE_DATE_VALIDATION_ERROR},
                 // Non existing calendar dates.
