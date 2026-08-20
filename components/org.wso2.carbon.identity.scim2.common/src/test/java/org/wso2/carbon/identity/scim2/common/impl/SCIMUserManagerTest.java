@@ -21,6 +21,7 @@ package org.wso2.carbon.identity.scim2.common.impl;
 import org.apache.commons.lang.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
@@ -94,6 +95,8 @@ import org.wso2.carbon.user.core.claim.ClaimManager;
 import org.wso2.carbon.user.core.common.AbstractUserStoreManager;
 import org.wso2.carbon.user.core.jdbc.JDBCUserStoreManager;
 import org.wso2.carbon.user.core.model.Condition;
+import org.wso2.carbon.user.core.model.OperationalCondition;
+import org.wso2.carbon.user.core.model.OperationalOperation;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.user.mgt.RolePermissionManagementService;
@@ -150,6 +153,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -787,6 +791,75 @@ public class SCIMUserManagerTest {
                                           int expectedResultCount, List<org.wso2.carbon.user.core.common.User>
                                                   filteredUsers) throws Exception {
 
+        mockUserFilteringDependencies(users, filteredUsers);
+
+        HashMap<String, Boolean> requiredClaimsMap = new HashMap<>();
+        requiredClaimsMap.put("urn:ietf:params:scim:schemas:core:2.0:User:userName", false);
+
+        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager,
+                mockClaimMetadataManagementService, "carbon.super");
+
+        UsersGetResponse result = scimUserManager.listUsersWithGET(buildFilterTree(filter), 1, null, null, null, null,
+                requiredClaimsMap);
+        assertEquals(result.getUsers().size(), expectedResultCount);
+    }
+
+    /**
+     * A filter combining its expressions with the 'or' operator has to reach the user store as an OR condition, and
+     * not be flattened into the AND condition that used to be the only supported shape.
+     */
+    @Test
+    public void testFilteringUsersWithOrOperator() throws Exception {
+
+        org.wso2.carbon.user.core.common.User testUser = new org.wso2.carbon.user.core.common.User(
+                UUID.randomUUID().toString(), "testUser1", "testUser1");
+        testUser.setUserStoreDomain("PRIMARY");
+        List<org.wso2.carbon.user.core.common.User> users = Collections.singletonList(testUser);
+        mockUserFilteringDependencies(users, users);
+
+        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager,
+                mockClaimMetadataManagementService, "carbon.super");
+        Node node = buildFilterTree("name.givenName eq testUser or emails eq testUser1@wso2.com");
+
+        UsersGetResponse result = scimUserManager.listUsersWithGET(node, 1, null, null, null, null, new HashMap<>());
+        assertEquals(result.getUsers().size(), 1);
+
+        ArgumentCaptor<Condition> conditionCaptor = ArgumentCaptor.forClass(Condition.class);
+        verify(mockedUserStoreManager, atLeastOnce())
+                .getPaginatedUserListWithID(conditionCaptor.capture(), anyString(), anyString(), anyInt(), anyInt(),
+                        nullable(String.class), nullable(String.class));
+        Condition condition = conditionCaptor.getValue();
+        assertTrue(condition instanceof OperationalCondition);
+        assertEquals(condition.getOperation(), OperationalOperation.OR.toString());
+    }
+
+    /**
+     * The user store filtering either narrows the result set with AND or widens it with OR, so a filter that mixes
+     * the two has to be rejected as a bad request rather than silently evaluated as one of them.
+     */
+    @Test(expectedExceptions = BadRequestException.class)
+    public void testFilteringUsersWithMixedAndOrOperators() throws Exception {
+
+        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager, mockedClaimManager);
+        Node node = buildFilterTree(
+                "userName eq testUser1 and (name.givenName eq testUser or emails eq testUser1@wso2.com)");
+
+        scimUserManager.listUsersWithGET(node, 1, 10, null, null, "PRIMARY", new HashMap<>());
+    }
+
+    private Node buildFilterTree(String filter) throws IOException, BadRequestException {
+
+        if (StringUtils.isBlank(filter)) {
+            return null;
+        }
+        SCIMResourceTypeSchema schema = SCIMResourceSchemaManager.getInstance().getUserResourceSchema();
+        return new FilterTreeManager(filter, schema).buildTree();
+    }
+
+    private void mockUserFilteringDependencies(List<org.wso2.carbon.user.core.common.User> users,
+                                               List<org.wso2.carbon.user.core.common.User> filteredUsers)
+            throws Exception {
+
         Map<String, String> scimToLocalClaimMap = new HashMap<>();
         scimToLocalClaimMap.put("urn:ietf:params:scim:schemas:core:2.0:User:userName",
                 "http://wso2.org/claims/username");
@@ -856,23 +929,6 @@ public class SCIMUserManagerTest {
         when(mockClaimMetadataManagementService.getLocalClaims(anyString())).thenReturn(localClaimList);
         when(mockClaimMetadataManagementService.getExternalClaims(anyString(), anyString()))
                 .thenReturn(externalClaimList);
-
-        HashMap<String, Boolean> requiredClaimsMap = new HashMap<>();
-        requiredClaimsMap.put("urn:ietf:params:scim:schemas:core:2.0:User:userName", false);
-
-        SCIMUserManager scimUserManager = new SCIMUserManager(mockedUserStoreManager,
-                mockClaimMetadataManagementService, "carbon.super");
-
-        Node node = null;
-        if (StringUtils.isNotBlank(filter)) {
-            SCIMResourceTypeSchema schema = SCIMResourceSchemaManager.getInstance().getUserResourceSchema();
-            FilterTreeManager filterTreeManager = new FilterTreeManager(filter, schema);
-            node = filterTreeManager.buildTree();
-        }
-
-        UsersGetResponse result = scimUserManager.listUsersWithGET(node, 1, null, null, null, null,
-                requiredClaimsMap);
-        assertEquals(result.getUsers().size(), expectedResultCount);
     }
 
     @Test
@@ -1011,6 +1067,11 @@ public class SCIMUserManagerTest {
                 {users, "name.givenName eq testUser and emails eq testUser1@wso2.com", 1,
                         new ArrayList<org.wso2.carbon.user.core.common.User>() {{
                             add(testUser1);
+                        }}},
+                {users, "name.givenName eq testNewUser or emails eq testUser1@wso2.com", 2,
+                        new ArrayList<org.wso2.carbon.user.core.common.User>() {{
+                            add(testUser1);
+                            add(testUser3);
                         }}},
                 {users, "name.givenName ne testUser", 1,
                         new ArrayList<org.wso2.carbon.user.core.common.User>() {{

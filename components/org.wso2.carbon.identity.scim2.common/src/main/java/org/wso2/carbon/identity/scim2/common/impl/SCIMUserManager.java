@@ -1695,6 +1695,7 @@ public class SCIMUserManager implements UserManager {
 
         // Handle limit equals NULL scenario.
         limit = handleLimitEqualsNULL(limit);
+        validateLogicalOperators(node);
         sanitizeNodeTree(node);
 
         // Handle single attribute search.
@@ -1712,6 +1713,43 @@ public class SCIMUserManager implements UserManager {
         } else {
             throw new CharonException("Unknown operation. Not either an expression node or an operation node.");
         }
+    }
+
+    /**
+     * Validate that the filter combines its expressions with a single logical operator. The user store filtering
+     * either narrows the result set with AND or widens it with OR, and a filter that mixes the two cannot be
+     * translated into a single user store query.
+     *
+     * @param node Filter condition tree.
+     * @throws BadRequestException If the filter combines both the 'and' and the 'or' operator.
+     */
+    private void validateLogicalOperators(Node node) throws BadRequestException {
+
+        Set<String> operators = new HashSet<>();
+        collectLogicalOperators(node, operators);
+        if (operators.size() > 1) {
+            throw new BadRequestException(String.format("Filters combining both the '%s' and the '%s' operator "
+                    + "are not supported.", SCIMConstants.OperationalConstants.AND,
+                    SCIMConstants.OperationalConstants.OR), ResponseCodeConstants.INVALID_FILTER);
+        }
+    }
+
+    private void collectLogicalOperators(Node node, Set<String> operators) {
+
+        if (!(node instanceof OperationNode)) {
+            return;
+        }
+        String operation = ((OperationNode) node).getOperation();
+        /*
+         * Only AND and OR are collected here. Any other operator, such as 'not', is left to be rejected by the
+         * condition builder, so that this validation does not report it as an AND/OR mix.
+         */
+        if (OperationalOperation.AND.toString().equalsIgnoreCase(operation)
+                || OperationalOperation.OR.toString().equalsIgnoreCase(operation)) {
+            operators.add(operation.toLowerCase());
+        }
+        collectLogicalOperators(node.getLeftNode(), operators);
+        collectLogicalOperators(node.getRightNode(), operators);
     }
 
     private void sanitizeNodeTree(Node node) {
@@ -2701,6 +2739,8 @@ public class SCIMUserManager implements UserManager {
             String operation = ((OperationNode) node).getOperation();
             if (OperationalOperation.AND.toString().equalsIgnoreCase(operation)) {
                 return new OperationalCondition(OperationalOperation.AND.toString(), leftCondition, rightCondition);
+            } else if (OperationalOperation.OR.toString().equalsIgnoreCase(operation)) {
+                return new OperationalCondition(OperationalOperation.OR.toString(), leftCondition, rightCondition);
             } else {
                 throw new CharonException("Unsupported Operation: " + operation);
             }
